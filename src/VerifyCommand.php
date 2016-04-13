@@ -2,27 +2,21 @@
 
 namespace Silktide\SyringeVerifier;
 
-use Downsider\PuzzleDI\Helper\PuzzleDataCollector;
-use Monolog\Logger;
-use Psr\Log\LoggerTrait;
-use Psr\Log\LogLevel;
 use Silktide\Syringe\ContainerBuilder;
 use Silktide\Syringe\Loader\JsonLoader;
 use Silktide\Syringe\Loader\YamlLoader;
 use Silktide\Syringe\ReferenceResolver;
-use Silktide\Syringe\SyringeServiceProvider;
 use Silktide\SyringeVerifier\Parser\ComposerParser;
 use Silktide\SyringeVerifier\Parser\ComposerParserResult;
-use Symfony\Bridge\Monolog\Handler\ConsoleHandler;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\Table;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class VerifyCommand extends Command
 {
+    use Loggable;
+
     protected $composerParser;
     protected $log;
     protected $input;
@@ -32,7 +26,6 @@ class VerifyCommand extends Command
     {
         parent::__construct();
         $this->composerParser = new ComposerParser();
-        $this->log = new Logger("SyringeVerifier");
     }
 
     public function configure()
@@ -48,8 +41,6 @@ class VerifyCommand extends Command
         $this->input = $inputInterface;
         $this->output = $outputInterface;
 
-        $this->log->setHandlers([new ConsoleHandler($outputInterface, null, [LogLevel::DEBUG])]);
-
         // 1. Work out what directory we're caring about
         $directory = getcwd();
         // That was easy
@@ -58,31 +49,32 @@ class VerifyCommand extends Command
         $parserResult = $this->composerParser->parse($directory."/composer.json");
 
         if (!$parserResult->usesSyringe() && !$inputInterface->getOption("force")) {
-            $this->log->critical("The project in this directory '{$directory}' is not a library includable by syringe via Puzzle-DI");
+            $this->error("The project in this directory '{$directory}' is not a library includable by syringe via Puzzle-DI");
             return 1;
         }
 
         $container = $this->setupContainer($parserResult);
 
-        $this->log->info("Attempting to build all services!");
+        $this->log("Attempting to build all services!");
+        $this->log(count($container->keys())." services/parameters found!");
+        /** @var \Exception[] $exceptions */
         $exceptions = [];
         foreach ($container->keys() as $key) {
             try{
                 $build = $container[$key];
             } catch (\Exception $e) {
-                $exceptions[] = [$e->getMessage(), $e->getFile(), $e->getLine()];
+                $exceptions[] = $e;
             }
         }
 
         if (count($exceptions) > 0) {
-            $this->log->crit("Failed to successfully build ".count($exceptions)." bits of DI config");
-            $table = new Table($outputInterface);
-            $table->setHeaders(["Message", "File", "Line"]);
-            $table->setRows($exceptions);
-            $table->render();
+            $this->error("Failed to successfully build ".count($exceptions)." bits of DI config");
+            foreach ($exceptions as $e) {
+                $this->log("  Message:".$e->getMessage().". File: ".$e->getFile().". Line: ".$e->getLine());
+            }
             return 1;
         } else {
-            $this->log->info("Succeeded!");
+            $this->success("Succeeded!");
             return 0;
         }
     }
@@ -114,6 +106,9 @@ class VerifyCommand extends Command
         }
 
         $additionalConfigs = $this->input->getOption("configs");
+        foreach ($additionalConfigs as $config) {
+            $builder->addConfigFile(realpath($config));
+        }
         $builder->addConfigFiles($parserResult->getConfigList());
 
 
