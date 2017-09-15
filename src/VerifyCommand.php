@@ -131,40 +131,6 @@ class VerifyCommand
         }
     }
 
-    /**
-     * @param ComposerParserResult $parserResult
-     * @return \Pimple\Container
-     */
-    public function buildContainer(ComposerParserResult $parserResult)
-    {
-        $directory = $parserResult->getDirectory();
-
-        $resolver = new ReferenceResolver();
-        $loaders = [
-            new JsonLoader(),
-            new YamlLoader(),
-            new PhpLoader()
-        ];
-
-        $builder = new ContainerBuilder($resolver, [$directory]);
-        foreach ($loaders as $loader) {
-            $builder->addLoader($loader);
-        }
-
-        $builder->setApplicationRootDirectory($directory);
-        if ($parserResult->usesSyringe()) {
-            $builder->addConfigFile($parserResult->getAbsoluteSyringeConfig());
-
-            // This is a hack regarding the somewhat naff way Namespaces can end up working
-            $builder->addConfigFiles([
-                $parserResult->getNamespace() => $parserResult->getAbsoluteSyringeConfig()
-            ]);
-        }
-
-        return $builder->createContainer();
-    }
-
-
     protected function arrayByArrayPath($array, array $path)
     {
         $key = array_shift($path);
