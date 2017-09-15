@@ -7,13 +7,6 @@ use Silktide\Syringe\Loader\JsonLoader;
 use Silktide\Syringe\Loader\PhpLoader;
 use Silktide\Syringe\Loader\YamlLoader;
 use Silktide\Syringe\ReferenceResolver;
-use Silktide\SyringeVerifier\Loggable;
-use Silktide\SyringeVerifier\Parser\ComposerParser;
-use Silktide\SyringeVerifier\Parser\ComposerParserResult;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
 
 class VerifyCommand
 {
@@ -41,12 +34,15 @@ class VerifyCommand
             exit(1);
         }
 
-        $decoded = json_decode($directory, true);
+        $this->log("Finding DI configuration");
+
+        $decoded = json_decode(file_get_contents($composerFilename), true);
 
         $configPaths = [];
         // Find the syringe path
         try{
             $configPaths[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
+            $this->log("Successfully found PuzzleDI composer.json data");
         } catch (\Exception $e) {
             $this->log("No Downsider Puzzle DI config found in composer.json");
             exit(1);
@@ -61,15 +57,16 @@ class VerifyCommand
                 throw new \Exception("No namespaces found");
             }
 
-            $key = key($psr4List);
+            $key = key($psr4);
         } catch (\Exception $e) {
             $this->log("Project is not using PSR-4");
             exit(1);
         }
 
-        $puzzleClassName = $key . "PuzzleConfig.php";
+        $puzzleClassName = $key . "PuzzleConfig";
         if (class_exists($puzzleClassName)) {
             // Then we're using the PuzzleConfig.php
+            $this->log("Successfully found PuzzleDI PuzzleConfig data");
             $configPaths = array_merge($configPaths, $puzzleClassName::getConfigPaths("silktide/syringe"));
         }
 
@@ -90,23 +87,35 @@ class VerifyCommand
 
         $container = $builder->createContainer();
 
-        $this->log("Attempting to build all services!");
-        $this->log(count($container->keys())." services/parameters found!");
-
+        $this->log("Attempting to build the ".count($container->keys())." found services/parameters");
         /** @var \Exception[] $exceptions */
         $exceptions = [];
         foreach ($container->keys() as $key) {
             try{
                 $build = $container[$key];
             } catch (\Throwable $e) {
-                $exceptions[] = $e;
+                $exceptions[] = ["Key" => $key, "Exception" => $e];
             }
         }
 
         if (count($exceptions) > 0) {
-            $this->error("Failed to successfully build ".count($exceptions)." bits of DI config");
-            foreach ($exceptions as $e) {
-                $this->error("  Message:".$e->getMessage().". File: ".$e->getFile().". Line: ".$e->getLine());
+            $this->error("DI config failed on ".count($exceptions)."  services");
+            $this->error("----------------------");
+            foreach ($exceptions as $k => $row) {
+                /**
+                 * @var string $key
+                 */
+                $key = $row["Key"];
+                /**
+                 * @var \Throwable $exception
+                 */
+                $exception = $row["Exception"];
+
+                $this->error("  Key: '{$key}'");
+                $this->error("  Message: ".$exception->getMessage());
+                $this->error("  File: ".$exception->getFile());
+                $this->error("  Line: ".$exception->getLine());
+                $this->error("----------------------");
             }
             exit(1);
         } else {

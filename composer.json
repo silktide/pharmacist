@@ -10,6 +10,7 @@
     "require": {
         "silktide/syringe": "~1"
     },
+    "bin": ["bin/pharmacist"],
     "autoload": {
         "psr-4": {
             "Silktide\\Pharmacist\\": "src/"
