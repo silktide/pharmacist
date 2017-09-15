@@ -85,7 +85,14 @@ class VerifyCommand
 
         $builder->addConfigFiles($configPaths);
 
-        $container = $builder->createContainer();
+        try{
+            $container = $builder->createContainer();
+        } catch (\Throwable $e) {
+            $this->error("DI config failed at initial container creation");
+            $this->error("  " . $e->getMessage());
+            exit(1);
+        }
+
 
         $this->log("Attempting to build the ".count($container->keys())." found services/parameters");
         /** @var \Exception[] $exceptions */
