@@ -1,0 +1,10 @@
+#!/usr/bin/php
+<?php
+
+$baseAutoloader = __DIR__ . "/vendor/autoload.php";
+
+// Otherwise, we're probably included via require-dev
+require_once("vendor/autoload.php");
+
+$verifyCommand = new \Silktide\Pharmacist\VerifyCommand(new \Silktide\SyringeVerifier\Parser\ComposerParser());
+$verifyCommand->run();
