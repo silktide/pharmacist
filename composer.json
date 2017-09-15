@@ -1,6 +1,6 @@
 {
-    "name": "silktide/syringe-verifier",
-    "description": "Verifies that your syringe config is correct",
+    "name": "silktide/pharmacist",
+    "description": "Deals with verifying that child projects using silktide/syringe and puzzle-di can correctly build containers",
     "authors": [
         {
             "name": "Doug",
@@ -8,12 +8,12 @@
         }
     ],
     "require": {
-        "silktide/syringe": "^1.1",
-        "symfony/console": "~2.8|^3.0"
+        "silktide/syringe": "~1"
     },
+    "bin": ["bin/pharmacist"],
     "autoload": {
         "psr-4": {
-            "Silktide\\SyringeVerifier\\": "src/"
+            "Silktide\\Pharmacist\\": "src/"
         }
     }
 }

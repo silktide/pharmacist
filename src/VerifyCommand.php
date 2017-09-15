@@ -1,95 +1,144 @@
 <?php
 
-namespace Silktide\SyringeVerifier;
+namespace Silktide\Pharmacist;
 
 use Silktide\Syringe\ContainerBuilder;
 use Silktide\Syringe\Loader\JsonLoader;
+use Silktide\Syringe\Loader\PhpLoader;
 use Silktide\Syringe\Loader\YamlLoader;
 use Silktide\Syringe\ReferenceResolver;
-use Silktide\SyringeVerifier\Parser\ComposerParser;
-use Silktide\SyringeVerifier\Parser\ComposerParserResult;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
 
-class VerifyCommand extends Command
+class VerifyCommand
 {
     use Loggable;
 
-    protected $composerParser;
-    protected $log;
-    protected $input;
-    protected $output;
-
-    public function __construct()
+    /**
+     * A quick summary of what this class needs to do:
+     *  1. It needs to look to see whether we are a child project, and have a extra/downsider-puzzle-di/silktide-syringe section
+           for the time being, if it hasn't, we want to die
+     *  2. It needs to look to see if we have a PuzzleConfig.php, if so, we want to use it
+     *
+     * @return int
+     * @throws \Exception
+     */
+    public function run()
     {
-        parent::__construct();
-        $this->composerParser = new ComposerParser();
-    }
-
-    public function configure()
-    {
-        // By setting the name as list, it's the default thing that will be run
-        $this->setName("verify")
-             ->addOption("configs", "c", InputOption::VALUE_IS_ARRAY + InputOption::VALUE_OPTIONAL, "Any additional configs we want to add manually", [])
-             ->addOption("force", "f", InputOption::VALUE_NONE, "Whether we want to force through trying it regardless of whether it looks like we're using Puzzle-DI in the parent project");
-    }
-
-    public function execute(InputInterface $inputInterface, OutputInterface $outputInterface)
-    {
-        $this->input = $inputInterface;
-        $this->output = $outputInterface;
-
         // 1. Work out what directory we're caring about
         $directory = getcwd();
-        // That was easy
 
-        // 2. Work out what base config we're meant to be using
-        $parserResult = $this->composerParser->parse($directory."/composer.json");
+        $composerFilename = $directory . "/composer.json";
 
-        if (!$parserResult->usesSyringe() && !$inputInterface->getOption("force")) {
-            $this->error("The project in this directory '{$directory}' is not a library includable by syringe via Puzzle-DI");
-            return 1;
+        // Does it have a reference to what syringe file it's meant to be using?
+        if (!file_exists($composerFilename)) {
+            $this->log("No composer.json file found");
+            exit(1);
         }
 
-        $container = $this->setupContainer($parserResult);
+        $this->log("Finding DI configuration");
 
-        $this->log("Attempting to build all services!");
-        $this->log(count($container->keys())." services/parameters found!");
+        $decoded = json_decode(file_get_contents($composerFilename), true);
+
+        $configPaths = [];
+        // Find the syringe path
+        try{
+            $configPaths[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
+            $this->log("Successfully found PuzzleDI composer.json data");
+        } catch (\Exception $e) {
+            $this->log("No Downsider Puzzle DI config found in composer.json");
+            exit(1);
+        }
+
+        // Work out if we're using PuzzleConfig
+        // Atm, we're only going to support PSR-4 'cause let's face it, this is pretty much entirely internal and
+        // nobody uses PSR-0
+        try{
+            $psr4 = $this->arrayByArrayPath($decoded, ["autoload", "psr-4"]);
+            if (count($psr4) == 0) {
+                throw new \Exception("No namespaces found");
+            }
+
+            $key = key($psr4);
+        } catch (\Exception $e) {
+            $this->log("Project is not using PSR-4");
+            exit(1);
+        }
+
+        $puzzleClassName = $key . "PuzzleConfig";
+        if (class_exists($puzzleClassName)) {
+            // Then we're using the PuzzleConfig.php
+            $this->log("Successfully found PuzzleDI PuzzleConfig data");
+            $configPaths = array_merge($configPaths, $puzzleClassName::getConfigPaths("silktide/syringe"));
+        }
+
+        // Right, so we've got our list of config paths, now let's try and build it
+        $resolver = new ReferenceResolver();
+        $loaders = [
+            new JsonLoader(),
+            new YamlLoader(),
+            new PhpLoader()
+        ];
+
+        $builder = new ContainerBuilder($resolver, [$directory]);
+        foreach ($loaders as $loader) {
+            $builder->addLoader($loader);
+        }
+
+        $builder->addConfigFiles($configPaths);
+
+        $container = $builder->createContainer();
+
+        $this->log("Attempting to build the ".count($container->keys())." found services/parameters");
         /** @var \Exception[] $exceptions */
         $exceptions = [];
         foreach ($container->keys() as $key) {
             try{
                 $build = $container[$key];
-            } catch (\Exception $e) {
-                $exceptions[] = $e;
+            } catch (\Throwable $e) {
+                $exceptions[] = ["Key" => $key, "Exception" => $e];
             }
         }
 
         if (count($exceptions) > 0) {
-            $this->error("Failed to successfully build ".count($exceptions)." bits of DI config");
-            foreach ($exceptions as $e) {
-                $this->log("  Message:".$e->getMessage().". File: ".$e->getFile().". Line: ".$e->getLine());
+            $this->error("DI config failed on ".count($exceptions)."  services");
+            $this->error("----------------------");
+            foreach ($exceptions as $k => $row) {
+                /**
+                 * @var string $key
+                 */
+                $key = $row["Key"];
+                /**
+                 * @var \Throwable $exception
+                 */
+                $exception = $row["Exception"];
+
+                $this->error("  Key: '{$key}'");
+                $this->error("  Message: ".$exception->getMessage());
+                $this->error("  File: ".$exception->getFile());
+                $this->error("  Line: ".$exception->getLine());
+                $this->error("----------------------");
             }
-            return 1;
+            exit(1);
         } else {
-            $this->success("Succeeded!");
-            return 0;
+            $this->log("Succeeded!");
+            exit(0);
         }
     }
 
-    public function setupContainer(ComposerParserResult $parserResult)
+    /**
+     * @param ComposerParserResult $parserResult
+     * @return \Pimple\Container
+     */
+    public function buildContainer(ComposerParserResult $parserResult)
     {
         $directory = $parserResult->getDirectory();
 
         $resolver = new ReferenceResolver();
         $loaders = [
             new JsonLoader(),
-            new YamlLoader()
+            new YamlLoader(),
+            new PhpLoader()
         ];
 
-        include($directory."/vendor/autoload.php");
         $builder = new ContainerBuilder($resolver, [$directory]);
         foreach ($loaders as $loader) {
             $builder->addLoader($loader);
@@ -105,14 +154,22 @@ class VerifyCommand extends Command
             ]);
         }
 
-        $additionalConfigs = $this->input->getOption("configs");
-        foreach ($additionalConfigs as $config) {
-            $builder->addConfigFile(realpath($config));
-        }
-        $builder->addConfigFiles($parserResult->getConfigList());
-
-
         return $builder->createContainer();
+    }
 
+
+    protected function arrayByArrayPath($array, array $path)
+    {
+        $key = array_shift($path);
+
+        if (!isset($array[$key])) {
+            throw new \Exception("The path key '{$key}' does not exist");
+        }
+
+        if (count($path) == 0) {
+            return $array[$key];
+        }
+
+        return $this->arrayByArrayPath($array[$key], $path);
     }
 }
