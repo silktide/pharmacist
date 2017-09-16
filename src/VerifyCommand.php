@@ -125,10 +125,10 @@ class VerifyCommand
                 $this->error("----------------------");
             }
             exit(1);
-        } else {
-            $this->log("Succeeded!");
-            exit(0);
         }
+        
+        $this->log("No configuration problems found");
+        exit(0);
     }
 
     protected function arrayByArrayPath($array, array $path)
