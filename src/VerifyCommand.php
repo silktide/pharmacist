@@ -15,7 +15,7 @@ class VerifyCommand
     /**
      * A quick summary of what this class needs to do:
      *  1. It needs to look to see whether we are a child project, and have a extra/downsider-puzzle-di/silktide-syringe section
-           for the time being, if it hasn't, we want to die
+     *     for the time being, if it hasn't, we want to die
      *  2. It needs to look to see if we have a PuzzleConfig.php, if so, we want to use it
      *
      * @return int
