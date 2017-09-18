@@ -1,6 +1,6 @@
 # Pharmacist
 
-![Pharmercy](/pharmercy.jpg?raw=true)
+<img src="https://github.com/silktide/pharmacist/blob/master/pharmercy.jpg" width="300" title="Pharmercy!">
 
 ## What? Why!
 
