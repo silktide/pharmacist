@@ -10,4 +10,4 @@ This is a project designed for sub-projects that are using [Syringe](https://git
 
 `composer require silktide/pharmacist --dev`
 
-Add `vendor/bin/phamacist` to your CI process (probably .travis.yml)
+Add `vendor/bin/pharmacist` to your CI process (probably .travis.yml)
