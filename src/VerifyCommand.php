@@ -106,7 +106,7 @@ class VerifyCommand
         }
 
         if (count($exceptions) > 0) {
-            $this->error("DI config failed on ".count($exceptions)."  services");
+            $this->error("DI config failed on ".count($exceptions)." services");
             $this->error("----------------------");
             foreach ($exceptions as $k => $row) {
                 /**
