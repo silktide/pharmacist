@@ -7,6 +7,7 @@ use Silktide\Syringe\Loader\JsonLoader;
 use Silktide\Syringe\Loader\PhpLoader;
 use Silktide\Syringe\Loader\YamlLoader;
 use Silktide\Syringe\ReferenceResolver;
+use Silktide\Syringe\Syringe;
 
 class VerifyCommand
 {
@@ -38,15 +39,7 @@ class VerifyCommand
 
         $decoded = json_decode(file_get_contents($composerFilename), true);
 
-        $configPaths = [];
-        // Find the syringe path
-        try{
-            $configPaths[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
-            $this->log("Successfully found PuzzleDI composer.json data");
-        } catch (\Exception $e) {
-            $this->log("No Downsider Puzzle DI config found in composer.json");
-            exit(1);
-        }
+        $configFiles = [];
 
         // Work out if we're using PuzzleConfig
         // Atm, we're only going to support PSR-4 'cause let's face it, this is pretty much entirely internal and
@@ -67,32 +60,28 @@ class VerifyCommand
         if (class_exists($puzzleClassName)) {
             // Then we're using the PuzzleConfig.php
             $this->log("Successfully found PuzzleDI PuzzleConfig data");
-            $configPaths = array_merge($configPaths, $puzzleClassName::getConfigPaths("silktide/syringe"));
+            $configFiles = array_merge($configFiles, array_flip($puzzleClassName::getConfigPaths("silktide/syringe")));
         }
 
-        // Right, so we've got our list of config paths, now let's try and build it
-        $resolver = new ReferenceResolver();
-        $loaders = [
-            new JsonLoader(),
-            new YamlLoader(),
-            new PhpLoader()
-        ];
 
-        $builder = new ContainerBuilder($resolver, [$directory]);
-        foreach ($loaders as $loader) {
-            $builder->addLoader($loader);
+        // Find the syringe path
+        try{
+            $configFiles[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
+            $this->log("Successfully found PuzzleDI composer.json data");
+        } catch (\Exception $e) {
+            $this->log("No Downsider Puzzle DI config found in composer.json");
+            exit(1);
         }
-
-        $builder->addConfigFiles($configPaths);
 
         try{
-            $container = $builder->createContainer();
+            $container = Syringe::build([
+                "files" => $configFiles
+            ]);
         } catch (\Throwable $e) {
             $this->error("DI config failed at initial container creation");
             $this->error("  " . $e->getMessage());
             exit(1);
         }
-
 
         $this->log("Attempting to build the ".count($container->keys())." found services/parameters");
         /** @var \Exception[] $exceptions */

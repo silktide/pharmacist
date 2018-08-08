@@ -8,7 +8,7 @@
         }
     ],
     "require": {
-        "silktide/syringe": "~1"
+        "silktide/syringe": "~2"
     },
     "bin": ["bin/pharmacist"],
     "autoload": {
