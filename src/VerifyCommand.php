@@ -66,7 +66,7 @@ class VerifyCommand
 
         // Find the syringe path
         try{
-            $configFiles[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
+            $configFiles[] = [$this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]) => null];
             $this->log("Successfully found PuzzleDI composer.json data");
         } catch (\Exception $e) {
             $this->log("No Downsider Puzzle DI config found in composer.json");
