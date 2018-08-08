@@ -60,13 +60,13 @@ class VerifyCommand
         if (class_exists($puzzleClassName)) {
             // Then we're using the PuzzleConfig.php
             $this->log("Successfully found PuzzleDI PuzzleConfig data");
-            $configFiles = array_merge($configFiles, array_flip($puzzleClassName::getConfigPaths("silktide/syringe")));
+            $configFiles = $puzzleClassName::getConfigPaths("silktide/syringe");
         }
 
 
         // Find the syringe path
         try{
-            $configFiles[] = [$this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]) => null];
+            $configFiles[] = $this->arrayByArrayPath($decoded, ["extra", "downsider-puzzle-di", "silktide/syringe", "path"]);
             $this->log("Successfully found PuzzleDI composer.json data");
         } catch (\Exception $e) {
             $this->log("No Downsider Puzzle DI config found in composer.json");
